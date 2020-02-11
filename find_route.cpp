@@ -1,3 +1,6 @@
+// Imtiaz Mujtaba Khaled
+// 1001551928
+
 #include <iostream>
 #include <utility>
 #include <unordered_map>
@@ -33,58 +36,91 @@ class PathState {
         friend bool operator<(const PathState& p1, const PathState& p2) {
             return p1.total_distance < p2.total_distance;
         }
+        
+        friend bool operator>(const PathState& p1, const PathState& p2) {
+            return p1.total_distance > p2.total_distance;
+        }
 };
 
 // Calculates First Uninformed Path To The Destination Node
 void GetUninformedPath(TreeNode* root, std::string destination) {
     
-    std::queue<TreeNode*> queue;
+    std::priority_queue<PathState, std::vector<PathState>, std::greater<PathState>> queue;
     std::unordered_map<std::string, int> visited;
     std::vector<std::string> paths;
-    queue.push(root);
-    TreeNode* curr_node = NULL;
+    PathState root_node(root, 0); 
+    PathState curr_node(root, -1); 
+    PathState found_node(root, -1);
+    queue.push(root_node);
     int path = 0, max_nodes = 0, nodes_expanded = 0, nodes_generated = 0;
-    bool flag = false;
+    bool flag_optimal = false, flag_found = false;
     ++visited[root->start];
 
-    // BFS visited
-    while(!queue.empty() && !flag) {
+    // uniform cost search with visited
+    while(!queue.empty() && !flag_optimal) {
         
         max_nodes = max(queue.size(), max_nodes);
-        curr_node = queue.front();
+        curr_node = queue.top();
         queue.pop();
         ++nodes_expanded;
 
-        if(curr_node->start == destination)  flag = true;
-
-        for(auto child : curr_node->children) {
-            if(visited[child.first->start] == 0) {
-                ++nodes_generated;
-                child.first->prev_node = curr_node;
-                queue.push(child.first);
-                ++visited[child.first->start];
-            }
+        if(curr_node.last_node->start == destination)  {
+            found_node = curr_node;
+            flag_found = true;
+            continue;
         }
 
+        if(flag_found && found_node.total_distance < curr_node.total_distance) {
+            flag_optimal = true;
+        }
+
+        if(flag_found) {
+            for(auto child : curr_node.last_node->children) {
+                if(visited[child.first->start] == 0 && 
+                    found_node.total_distance < curr_node.total_distance + child.second) {
+                    // std::cout << curr_node.last_node->start << " to " << child.first->start << ": " << curr_node.total_distance + child.second << std::endl;
+                    ++nodes_generated;
+                    child.first->prev_node = curr_node.last_node;
+                    PathState next_node(child.first, curr_node.total_distance + child.second);
+                    queue.push(next_node);
+                    ++visited[child.first->start];
+                }
+            }
+        } else {
+            for(auto child : curr_node.last_node->children) {
+                if(visited[child.first->start] == 0) {
+                    // std::cout << curr_node.last_node->start << " to " << child.first->start << ": " << curr_node.total_distance + child.second << std::endl;
+                    ++nodes_generated;
+                    child.first->prev_node = curr_node.last_node;
+                    PathState next_node(child.first, curr_node.total_distance + child.second);
+                    queue.push(next_node);
+                    ++visited[child.first->start];
+                }
+            }
+        } 
     }
 
-    while(curr_node->prev_node !=  NULL && flag) {
-        std::ostringstream path_stream;
-        path_stream << curr_node->prev_node->start << " to "<< curr_node->start
-                    << ", " << curr_node->prev_node->children[curr_node] << ".0 km\n";
-        std::string curr_path = path_stream.str();
-        paths.push_back(curr_path);
-        path += curr_node->prev_node->children[curr_node]; 
-        curr_node = curr_node->prev_node;
+    TreeNode * curr_tree_node = NULL;
+    if(found_node.total_distance != -1) {
+        curr_tree_node = found_node.last_node;
+        while(curr_tree_node->prev_node !=  NULL && flag_found) {
+            std::ostringstream path_stream;
+            path_stream << curr_tree_node->prev_node->start << " to "<< curr_tree_node->start
+                        << ", " << curr_tree_node->prev_node->children[curr_tree_node] << ".0 km\n";
+            std::string curr_path = path_stream.str();
+            paths.push_back(curr_path);
+            path += curr_tree_node->prev_node->children[curr_tree_node]; 
+            curr_tree_node = curr_tree_node->prev_node;
+        }
     }
-
+    
     std::cout << "nodes expanded: " << nodes_expanded << "\n"
               << "nodes generated: " << nodes_generated << "\n"
               << "max nodes in memory: " << max_nodes << "\n"
               << "distance: " << path << "\n"
               << "route: " << "\n";
-              
-    if(!flag) {
+
+    if(paths.empty()) {
         std::cout << "none" << std::endl;
     } else {
         for(int i = paths.size() - 1; i >= 0; --i) {
@@ -95,59 +131,68 @@ void GetUninformedPath(TreeNode* root, std::string destination) {
 
 
 // Calculates Optimal Path To The Destination Node By Checking Results With Heuristic 
-void GetInformedPath(TreeNode* root, std::string destination, 
-std::unordered_map<std::string, int> heuristic_map) {
-
-    std::priority_queue<PathState*> queue;
+void GetInformedPath(TreeNode* root, std::string destination, std::unordered_map<std::string, int> heuristic) {
+    
+    std::priority_queue<PathState, std::vector<PathState>, std::greater<PathState>> queue;
     std::unordered_map<std::string, int> visited;
     std::vector<std::string> paths;
-    PathState* root_state = new PathState(root,0);
-    PathState* curr_state = NULL;
-    queue.push(root_state);
+    PathState root_node(root, 0); 
+    PathState curr_node(root, -1); 
+    PathState found_node(root, -1);
+    queue.push(root_node);
     int path = 0, max_nodes = 0, nodes_expanded = 0, nodes_generated = 0;
-    bool flag = false;
+    bool flag_optimal = false, flag_found = false;
     ++visited[root->start];
 
-    // BFS visited
-    while(!queue.empty() && !flag) {
+    // uniform cost search with visited
+    while(!queue.empty() && !flag_found) {
         
         max_nodes = max(queue.size(), max_nodes);
-        curr_state = queue.top();
+        curr_node = queue.top();
         queue.pop();
         ++nodes_expanded;
 
-        if(curr_state->last_node->start == destination)  flag = true;
+        if(curr_node.last_node->start == destination)  {
+            found_node = curr_node;
+            flag_found = true;
+            continue;
+        }
 
-        for(auto child : curr_state->last_node->children) {
-            if(visited[child.first->start] == 0 && 
-            heuristic_map[curr_state->last_node->start] > heuristic_map[child.first->start]) {
+        for(auto child : curr_node.last_node->children) {
+            if(visited[child.first->start] == 0) {
                 ++nodes_generated;
-                child.first->prev_node = curr_state->last_node;
-                PathState* new_state = new PathState(child.first, curr_state->total_distance + child.second);
-                queue.push(new_state);
+                child.first->prev_node = curr_node.last_node;
+                int path_distance = curr_node.total_distance == 0 ? child.second + heuristic[child.first->start] : 
+                    curr_node.total_distance + child.second + heuristic[child.first->start] - 
+                    heuristic[curr_node.last_node->start];
+                PathState next_node(child.first, path_distance);
+                queue.push(next_node);
                 ++visited[child.first->start];
             }
         }
     }
 
-    TreeNode* curr_node = curr_state->last_node;
-    while(curr_node->prev_node !=  NULL && flag) {
-        std::ostringstream path_stream;
-        path_stream << curr_node->prev_node->start << " to "<< curr_node->start
-                    << ", " << curr_node->prev_node->children[curr_node] << ".0 km\n";
-        std::string curr_path = path_stream.str();
-        paths.push_back(curr_path);
-        path += curr_node->prev_node->children[curr_node]; 
-        curr_node = curr_node->prev_node;
+    TreeNode * curr_tree_node = NULL;
+    if(found_node.total_distance != -1) {
+        curr_tree_node = found_node.last_node;
+        while(curr_tree_node->prev_node !=  NULL && flag_found) {
+            std::ostringstream path_stream;
+            path_stream << curr_tree_node->prev_node->start << " to "<< curr_tree_node->start
+                        << ", " << curr_tree_node->prev_node->children[curr_tree_node] << ".0 km\n";
+            std::string curr_path = path_stream.str();
+            paths.push_back(curr_path);
+            path += curr_tree_node->prev_node->children[curr_tree_node]; 
+            curr_tree_node = curr_tree_node->prev_node;
+        }
     }
-
+    
     std::cout << "nodes expanded: " << nodes_expanded << "\n"
               << "nodes generated: " << nodes_generated << "\n"
               << "max nodes in memory: " << max_nodes << "\n"
               << "distance: " << path << "\n"
               << "route: " << "\n";
-              
-    if(!flag) {
+
+    if(paths.empty()) {
         std::cout << "none" << std::endl;
     } else {
         for(int i = paths.size() - 1; i >= 0; --i) {
